@@ -274,8 +274,39 @@ function render(state) {
     overlay.classList.add('hidden');
   }
 
+  // mode banner + mode-dependent UI
+  const mode = settings.gameMode || 'test';
+  const banner = document.getElementById('mode-banner');
+  banner.className = `mode-${mode}`;
+  document.getElementById('mode-label').textContent =
+    mode === 'live' ? 'LIVE' : mode === 'offline' ? 'OFFLINE / SOLO PLAY' : 'TEST MODE';
+
+  document.getElementById('offline-bar').classList.toggle('hidden', mode !== 'offline');
+  instructions.classList.toggle('hidden', mode === 'offline');
+
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  const modeHint = document.getElementById('mode-hint');
+  modeHint.textContent =
+    mode === 'live' ? 'Connected to your real TikTok LIVE chat. Test/Offline controls are disabled.' :
+    mode === 'offline' ? 'No TikTok needed. Use the Join/Guess bar at the bottom of the screen to play solo.' :
+    'No TikTok connection is made. Use the Chat Simulator (System tab) to rehearse.';
+
+  const testHint = document.getElementById('test-mode-hint');
+  const testInputs = ['test-username', 'test-comment', 'test-send-btn'];
+  if (mode === 'test') {
+    testHint.classList.add('hidden');
+    testInputs.forEach((id) => { document.getElementById(id).disabled = false; });
+  } else {
+    testHint.classList.remove('hidden');
+    testInputs.forEach((id) => { document.getElementById(id).disabled = true; });
+  }
+
   // host panel status readouts
-  document.getElementById('conn-status').textContent = state.tiktokConnected ? 'Connected' : 'Disconnected';
+  document.getElementById('conn-status').textContent =
+    mode !== 'live' ? `Not used (${mode === 'offline' ? 'Offline' : 'Test'} mode)` :
+    state.tiktokConnected ? 'Connected' : 'Disconnected (retrying)';
   document.getElementById('env-status').textContent = state.envKeyPresent ? 'Connected' : 'Missing';
 
   // event log
@@ -337,6 +368,39 @@ document.getElementById('reconnect-btn').addEventListener('click', () => {
 });
 
 socket.on('hostAuthFailed', () => alert('Wrong host passcode.'));
+
+// -----------------------------------------------------------------
+// MODE SWITCH (Test / Live / Offline)
+// -----------------------------------------------------------------
+document.querySelectorAll('.mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.mode;
+    if (mode === 'live' && !confirm('Switch to LIVE mode? This connects to your real TikTok LIVE chat.')) return;
+    socket.emit('hostAction', { passcode: passcode(), action: 'setGameMode', mode });
+  });
+});
+
+// -----------------------------------------------------------------
+// OFFLINE (SOLO) PLAY BAR
+// -----------------------------------------------------------------
+function offlineUsername() {
+  return document.getElementById('offline-username').value || 'Player1';
+}
+document.getElementById('offline-join-btn').addEventListener('click', () => {
+  socket.emit('offlineAction', { action: 'join', username: offlineUsername() });
+});
+document.getElementById('offline-leave-btn').addEventListener('click', () => {
+  socket.emit('offlineAction', { action: 'leave', username: offlineUsername() });
+});
+function sendOfflineGuess() {
+  const guessEl = document.getElementById('offline-guess');
+  socket.emit('offlineAction', { action: 'guess', username: offlineUsername(), guess: guessEl.value });
+  guessEl.value = '';
+}
+document.getElementById('offline-guess-btn').addEventListener('click', sendOfflineGuess);
+document.getElementById('offline-guess').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendOfflineGuess();
+});
 
 // custom next word
 document.getElementById('next-word-btn').addEventListener('click', () => {

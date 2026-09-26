@@ -135,9 +135,20 @@ const CHARACTER_CLASSES = {
 
 const THEME_SKINS = ['neon-city', 'midnight', 'sunset', 'forest', 'minimal-light'];
 
+// Three modes, switchable live from the Host Settings panel:
+//  - 'test'    : no TikTok connection is attempted at all. Use the Test Mode
+//                chat simulator (System tab) to rehearse the game.
+//  - 'live'    : connects to your TikTok LIVE chat; only real TikTok chat
+//                controls the game.
+//  - 'offline' : no TikTok connection either. Shows an on-screen "Play"
+//                control bar so you can join a team and type your own
+//                guesses directly, for solo practice with no chat at all.
+const GAME_MODES = ['test', 'live', 'offline'];
+
 function defaultSettings() {
   return {
     hostPasscode: DEFAULT_HOST_PASSCODE,
+    gameMode: 'test',
 
     // Chat command triggers
     joinCommand: 'joinrivaldle',
@@ -511,6 +522,26 @@ function hostResetScores() {
   broadcastState();
 }
 
+function hostSetGameMode(mode) {
+  if (!GAME_MODES.includes(mode)) return;
+  if (mode === state.settings.gameMode) return;
+  state.settings.gameMode = mode;
+  persist();
+  log(`Host switched to ${mode.toUpperCase()} mode.`);
+
+  if (mode === 'live') {
+    // Entering Live mode: (re)connect to TikTok if not already connected.
+    if (!state.tiktokConnected) connectToTikTok();
+  } else {
+    // Leaving Live mode: stop any active connection/retry immediately so
+    // no real TikTok chat can leak into Test or Offline mode.
+    if (tiktokRetryTimer) { clearTimeout(tiktokRetryTimer); tiktokRetryTimer = null; }
+    if (tiktokConnection) { try { tiktokConnection.disconnect(); } catch (e) { /* ignore */ } tiktokConnection = null; }
+    state.tiktokConnected = false;
+  }
+  broadcastState();
+}
+
 function hostSetNextWord(word) {
   const clean = (word || '').trim().toLowerCase();
   if (clean.length !== 5 || !/^[a-z]+$/.test(clean)) return { ok: false, error: 'Must be exactly 5 letters, A-Z only.' };
@@ -607,19 +638,26 @@ function connectToTikTok() {
       console.error('Failed to connect to TikTok LIVE:', err.message);
       state.tiktokConnected = false;
       broadcastState();
-      tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
+      if (state.settings.gameMode === 'live') {
+        tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
+      }
     });
 
   connection.on('chat', (data) => {
+    if (state.settings.gameMode !== 'live') return; // ignore stray events outside Live mode
     handleChatMessage(data.uniqueId, data.comment, data.profilePictureUrl);
   });
 
   connection.on('disconnected', () => {
-    console.log('Disconnected from TikTok LIVE, retrying...');
+    console.log('Disconnected from TikTok LIVE.');
     state.tiktokConnected = false;
-    log('Disconnected from TikTok LIVE. Retrying...');
-    broadcastState();
-    tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
+    if (state.settings.gameMode === 'live') {
+      log('Disconnected from TikTok LIVE. Retrying...');
+      broadcastState();
+      tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
+    } else {
+      broadcastState();
+    }
   });
 }
 
@@ -656,6 +694,7 @@ io.on('connection', (socket) => {
       case 'resetScores': hostResetScores(); break;
       case 'reconnectTikTok': hostReconnectTikTok(); break;
       case 'updateSettings': hostUpdateSettings(msg.patch); break;
+      case 'setGameMode': hostSetGameMode(msg.mode); break;
       case 'setNextWord': {
         const res = hostSetNextWord(msg.word);
         socket.emit('hostActionResult', res);
@@ -665,14 +704,35 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Lets you test the game from a browser without TikTok.
+  // Lets you simulate TikTok chat messages from the host panel.
+  // Only active while in Test mode, so it can never fire during a real
+  // Live broadcast or interfere with Offline solo play.
   socket.on('testChat', (msg) => {
+    if (state.settings.gameMode !== 'test') return;
     if (!checkPasscode(msg)) return;
     handleChatMessage(msg.username || 'tester', msg.comment || '', msg.profilePic || '');
+  });
+
+  // Offline (solo) play: an on-screen control bar lets you join a team and
+  // type your own guesses directly, with no TikTok connection and no
+  // passcode needed. Only active while in Offline mode.
+  socket.on('offlineAction', (msg) => {
+    if (state.settings.gameMode !== 'offline') return;
+    if (!msg || typeof msg !== 'object') return;
+    const username = (msg.username || 'You').trim().slice(0, 24) || 'You';
+    switch (msg.action) {
+      case 'join': joinGame(username, ''); break;
+      case 'leave': leaveGame(username); break;
+      case 'guess': handleGuess(username, msg.guess || ''); break;
+      default: break;
+    }
   });
 });
 
 server.listen(PORT, () => {
   console.log(`Rivaldle server running on port ${PORT}`);
-  connectToTikTok();
+  console.log(`Starting in ${state.settings.gameMode.toUpperCase()} mode.`);
+  if (state.settings.gameMode === 'live') {
+    connectToTikTok();
+  }
 });

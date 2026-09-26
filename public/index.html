@@ -19,6 +19,7 @@
         <button id="gear-btn" title="Host settings" aria-label="Host settings">⚙</button>
       </div>
       <p id="status-text">Lobby: Waiting for Players (0/4)</p>
+      <div id="mode-banner" class="mode-test"><span id="mode-dot"></span><span id="mode-label">TEST MODE</span></div>
       <div id="timer-bar-wrap" class="hidden"><div id="timer-bar"></div></div>
     </header>
 
@@ -104,6 +105,13 @@
     <!-- ZONE 3: FOOTER -->
     <footer id="footer">
       <p id="instructions">Type "joinrivaldle" to play! (Limit: 4 Players)</p>
+      <div id="offline-bar" class="hidden">
+        <input id="offline-username" maxlength="24" placeholder="Your name" value="Player1" />
+        <button id="offline-join-btn">Join</button>
+        <button id="offline-leave-btn">Leave</button>
+        <input id="offline-guess" maxlength="5" placeholder="Guess" style="text-transform:uppercase" />
+        <button id="offline-guess-btn">Guess</button>
+      </div>
     </footer>
 
   </div>
@@ -126,6 +134,16 @@
 
     <div class="host-row">
       <input id="host-passcode" type="password" placeholder="Host passcode" autocomplete="off" />
+    </div>
+
+    <div class="host-section" id="mode-section">
+      <h3>Mode</h3>
+      <div class="mode-switch">
+        <button class="mode-btn" data-mode="test">Test</button>
+        <button class="mode-btn" data-mode="live">Live</button>
+        <button class="mode-btn" data-mode="offline">Offline</button>
+      </div>
+      <p class="hint-text" id="mode-hint"></p>
     </div>
 
     <div class="tabs">
@@ -270,7 +288,8 @@
         </div>
       </div>
       <div class="host-section test-section">
-        <h3>Test Mode (no TikTok needed)</h3>
+        <h3>Chat Simulator</h3>
+        <p class="hint-text" id="test-mode-hint">Switch to <strong>Test</strong> mode above to use this.</p>
         <div class="host-row">
           <input id="test-username" placeholder="fake username" value="tester1" />
         </div>

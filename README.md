@@ -95,7 +95,28 @@ Click **Save Changes** - Render will automatically restart your app.
 - Tap the **⚙ gear icon** in the top-right of the header - a settings panel
   slides out from the right.
 - Type your host passcode into the box at the top before using any control.
+- Right below the passcode box is the **Mode** switch - see below.
 - The panel has four tabs:
+
+### Mode: Test / Live / Offline
+
+A colored badge under the title (TEST MODE / LIVE / OFFLINE) always shows
+which mode you're in, and switching modes requires your host passcode.
+
+- **Test** (the default on a fresh deploy) - no TikTok connection is made
+  at all. Use the **Chat Simulator** in the System tab to fake chat
+  messages (`joinrivaldle`, a 5-letter guess, `!leave`, etc.) and rehearse
+  the whole game, including right after you deploy an update, before
+  trusting it on a real stream.
+- **Live** - connects to your real TikTok LIVE chat (`TIKTOK_USERNAME` /
+  `EULER_KEY`). This is what you switch to right before you go live. Only
+  real TikTok chat controls the game in this mode.
+- **Offline** - also makes no TikTok connection. Instead, an on-screen
+  **Join / Guess bar** appears at the bottom of the game screen (no need to
+  open Host Settings) - type a name, tap **Join** to grab an open team slot,
+  then type 5-letter guesses into the **Guess** box and tap **Guess** (or
+  press Enter). Perfect for playing by yourself, or practicing offline with
+  friends passing one device around.
 
 ### Game Rules tab
 - **Quick actions:** kick any team, force-skip the current round, pause /
@@ -169,6 +190,8 @@ Tap the **✕** in the panel header to close it again before you go live.
 
 ## If something doesn't connect
 
+- These only matter in **Live** mode - Test and Offline never touch TikTok,
+  so there's nothing to connect there.
 - **"TikTok connection: Disconnected"** in the settings panel usually means
   you are not currently live on TikTok, your `TIKTOK_USERNAME` is misspelled,
   or your Eulerstream key needs attention. The app automatically keeps
