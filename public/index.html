@@ -6,115 +6,265 @@
 <title>Rivaldle</title>
 <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-theme="neon-city">
+
+  <canvas id="confetti-canvas"></canvas>
 
   <div id="app">
 
     <!-- ZONE 1: HEADER -->
     <header id="header">
-      <h1 id="title">RIVALDLE</h1>
+      <div id="header-top">
+        <h1 id="title">RIVALDLE</h1>
+        <button id="gear-btn" title="Host settings" aria-label="Host settings">⚙</button>
+      </div>
       <p id="status-text">Lobby: Waiting for Players (0/4)</p>
+      <div id="timer-bar-wrap" class="hidden"><div id="timer-bar"></div></div>
     </header>
+
+    <!-- SCOREBOARD -->
+    <div id="scoreboard">
+      <div class="score-chip" data-team="red"><span class="score-name" id="score-name-red">Team Red</span><span class="score-val" id="score-val-red">0</span></div>
+      <div class="score-chip" data-team="blue"><span class="score-name" id="score-name-blue">Team Blue</span><span class="score-val" id="score-val-blue">0</span></div>
+      <div class="score-chip" data-team="green"><span class="score-name" id="score-name-green">Team Green</span><span class="score-val" id="score-val-green">0</span></div>
+      <div class="score-chip" data-team="yellow"><span class="score-name" id="score-name-yellow">Team Yellow</span><span class="score-val" id="score-val-yellow">0</span></div>
+    </div>
 
     <!-- ZONE 2: 2x2 ARENA -->
     <main id="arena">
       <div class="quadrant" data-team="red">
-        <div class="char-body char-red">
-          <img class="avatar" id="avatar-red" src="" alt="" />
+        <div class="lock-badge hidden" id="lock-red">OUT OF GUESSES</div>
+        <div class="avatar-rig" id="rig-red" data-class="samurai">
+          <div class="accessory accessory-back"></div>
+          <div class="head-circle" id="avatar-red"><span class="head-fallback">?</span></div>
+          <div class="accessory accessory-front"></div>
+          <div class="body-costume"></div>
         </div>
-        <div class="username" id="username-red">OPEN</div>
+        <div class="name-badge"><span class="note">♪</span><span class="username" id="username-red">OPEN</span></div>
         <div class="board" id="board-red"></div>
       </div>
 
       <div class="quadrant" data-team="blue">
-        <div class="char-body char-blue">
-          <img class="avatar" id="avatar-blue" src="" alt="" />
+        <div class="lock-badge hidden" id="lock-blue">OUT OF GUESSES</div>
+        <div class="avatar-rig" id="rig-blue" data-class="sorcerer">
+          <div class="accessory accessory-back"></div>
+          <div class="head-circle" id="avatar-blue"><span class="head-fallback">?</span></div>
+          <div class="accessory accessory-front"></div>
+          <div class="body-costume"></div>
         </div>
-        <div class="username" id="username-blue">OPEN</div>
+        <div class="name-badge"><span class="note">♪</span><span class="username" id="username-blue">OPEN</span></div>
         <div class="board" id="board-blue"></div>
       </div>
 
       <div class="quadrant" data-team="green">
-        <div class="char-body char-green">
-          <img class="avatar" id="avatar-green" src="" alt="" />
+        <div class="lock-badge hidden" id="lock-green">OUT OF GUESSES</div>
+        <div class="avatar-rig" id="rig-green" data-class="explorer">
+          <div class="accessory accessory-back"></div>
+          <div class="head-circle" id="avatar-green"><span class="head-fallback">?</span></div>
+          <div class="accessory accessory-front"></div>
+          <div class="body-costume"></div>
         </div>
-        <div class="username" id="username-green">OPEN</div>
+        <div class="name-badge"><span class="note">♪</span><span class="username" id="username-green">OPEN</span></div>
         <div class="board" id="board-green"></div>
       </div>
 
       <div class="quadrant" data-team="yellow">
-        <div class="char-body char-yellow">
-          <img class="avatar" id="avatar-yellow" src="" alt="" />
+        <div class="lock-badge hidden" id="lock-yellow">OUT OF GUESSES</div>
+        <div class="avatar-rig" id="rig-yellow" data-class="cleric">
+          <div class="accessory accessory-back"></div>
+          <div class="head-circle" id="avatar-yellow"><span class="head-fallback">?</span></div>
+          <div class="accessory accessory-front"></div>
+          <div class="body-costume"></div>
         </div>
-        <div class="username" id="username-yellow">OPEN</div>
+        <div class="name-badge"><span class="note">♪</span><span class="username" id="username-yellow">OPEN</span></div>
         <div class="board" id="board-yellow"></div>
       </div>
     </main>
 
-    <!-- ZONE 3: FOOTER / INSTRUCTIONS -->
+    <!-- ZONE 3: FOOTER -->
     <footer id="footer">
       <p id="instructions">Type "joinrivaldle" to play! (Limit: 4 Players)</p>
     </footer>
 
   </div>
 
-  <!-- WINNER OVERLAY -->
+  <!-- WINNER / MATCH OVER OVERLAY -->
   <div id="winner-overlay" class="hidden">
     <div id="winner-box">
       <div id="winner-text"></div>
       <div id="winner-word"></div>
+      <div id="matchover-standings" class="hidden"></div>
     </div>
   </div>
 
-  <!-- HOST SETTINGS PANEL (hidden by default; long-press the title to open) -->
+  <!-- HOST SETTINGS PANEL -->
   <div id="host-panel" class="hidden">
-    <h2>Host Settings</h2>
+    <div id="host-panel-head">
+      <h2>Host Settings</h2>
+      <button id="close-panel-btn">✕</button>
+    </div>
 
     <div class="host-row">
-      <input id="host-passcode" type="password" placeholder="Host passcode" />
+      <input id="host-passcode" type="password" placeholder="Host passcode" autocomplete="off" />
     </div>
 
-    <div class="host-section">
-      <h3>Quick Actions</h3>
-      <div class="host-row">
-        <button class="kick-btn" data-team="red">Kick Red</button>
-        <button class="kick-btn" data-team="blue">Kick Blue</button>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="tab-game">Game Rules</button>
+      <button class="tab-btn" data-tab="tab-teams">Teams &amp; Avatars</button>
+      <button class="tab-btn" data-tab="tab-display">Display &amp; Audio</button>
+      <button class="tab-btn" data-tab="tab-system">System</button>
+    </div>
+
+    <!-- GAME RULES -->
+    <div class="tab-panel" id="tab-game">
+      <div class="host-section">
+        <h3>Quick Actions</h3>
+        <div class="host-row">
+          <button class="kick-btn" data-team="red">Kick Red</button>
+          <button class="kick-btn" data-team="blue">Kick Blue</button>
+        </div>
+        <div class="host-row">
+          <button class="kick-btn" data-team="green">Kick Green</button>
+          <button class="kick-btn" data-team="yellow">Kick Yellow</button>
+        </div>
+        <div class="host-row">
+          <button id="force-skip-btn">Force Skip Round</button>
+          <button id="pause-btn">Pause / Resume</button>
+        </div>
+        <div class="host-row">
+          <button id="reset-scores-btn">Reset Scoreboard</button>
+        </div>
       </div>
-      <div class="host-row">
-        <button class="kick-btn" data-team="green">Kick Green</button>
-        <button class="kick-btn" data-team="yellow">Kick Yellow</button>
+
+      <div class="host-section">
+        <h3>Rules</h3>
+        <label class="host-row toggle-row"><span>Allow chat substitutions</span>
+          <input type="checkbox" id="setting-subbing" /></label>
+        <label class="host-row toggle-row"><span>Hard Mode (reuse revealed clues)</span>
+          <input type="checkbox" id="setting-hardmode" /></label>
+
+        <label class="host-row field-row"><span>Max guesses / round (0 = unlimited)</span>
+          <input type="number" id="setting-maxguesses" min="0" max="20" /></label>
+        <label class="host-row field-row"><span>Round timer, seconds (0 = off)</span>
+          <input type="number" id="setting-roundtimer" min="0" max="3600" /></label>
+        <label class="host-row field-row"><span>Seconds before next round auto-starts</span>
+          <input type="number" id="setting-resetdelay" min="3" max="120" /></label>
+        <label class="host-row field-row"><span>Points per round win</span>
+          <input type="number" id="setting-winpoints" min="0" max="1000" /></label>
+        <label class="host-row field-row"><span>Rounds per match (0 = endless)</span>
+          <input type="number" id="setting-maxrounds" min="0" max="500" /></label>
       </div>
-      <div class="host-row">
-        <button id="force-skip-btn">Force Skip Round</button>
-        <button id="pause-btn">Pause / Resume</button>
+
+      <div class="host-section">
+        <h3>Chat Commands</h3>
+        <label class="host-row field-row"><span>Join command</span>
+          <input id="setting-joincmd" /></label>
+        <label class="host-row field-row"><span>Leave command</span>
+          <input id="setting-leavecmd" /></label>
+        <label class="host-row field-row"><span>Substitute command</span>
+          <input id="setting-subcmd" /></label>
+      </div>
+
+      <div class="host-section">
+        <h3>Custom Next Word</h3>
+        <div class="host-row">
+          <input id="next-word-input" maxlength="5" placeholder="5-letter word" style="text-transform:uppercase" />
+          <button id="next-word-btn">Set for next round</button>
+        </div>
+        <div class="host-row hint-text" id="next-word-msg"></div>
+      </div>
+
+      <div class="host-section">
+        <button id="save-game-settings-btn" class="save-btn">Save Game Rules</button>
       </div>
     </div>
 
-    <div class="host-section">
-      <h3>Rules</h3>
-      <div class="host-row">
-        <button id="toggle-subbing-btn">Enable / Disable Subbing</button>
+    <!-- TEAMS & AVATARS -->
+    <div class="tab-panel hidden" id="tab-teams">
+      <div class="host-section">
+        <h3>How avatars work</h3>
+        <p class="hint-text">Each player's real, circular TikTok profile photo is automatically used as their character's head the moment they join. Pick a costume "class" per team below — the photo always stays the head.</p>
+      </div>
+      <div class="host-section" id="team-editor-red">
+        <h3>Team Red</h3>
+        <div class="host-row"><input id="teamname-red" maxlength="24" /></div>
+        <div class="host-row"><select id="teamclass-red"></select></div>
+      </div>
+      <div class="host-section" id="team-editor-blue">
+        <h3>Team Blue</h3>
+        <div class="host-row"><input id="teamname-blue" maxlength="24" /></div>
+        <div class="host-row"><select id="teamclass-blue"></select></div>
+      </div>
+      <div class="host-section" id="team-editor-green">
+        <h3>Team Green</h3>
+        <div class="host-row"><input id="teamname-green" maxlength="24" /></div>
+        <div class="host-row"><select id="teamclass-green"></select></div>
+      </div>
+      <div class="host-section" id="team-editor-yellow">
+        <h3>Team Yellow</h3>
+        <div class="host-row"><input id="teamname-yellow" maxlength="24" /></div>
+        <div class="host-row"><select id="teamclass-yellow"></select></div>
+      </div>
+      <div class="host-section">
+        <button id="save-team-settings-btn" class="save-btn">Save Teams &amp; Avatars</button>
       </div>
     </div>
 
-    <div class="host-section">
-      <h3>System</h3>
-      <div class="host-row"><span>TikTok connection:</span> <span id="conn-status">-</span></div>
-      <div class="host-row"><span>Euler key on server:</span> <span id="env-status">-</span></div>
+    <!-- DISPLAY & AUDIO (mostly local to this device / OBS source) -->
+    <div class="tab-panel hidden" id="tab-display">
+      <div class="host-section">
+        <h3>Theme Skin</h3>
+        <div class="host-row"><select id="setting-theme"></select></div>
+        <p class="hint-text">Applies to everyone watching this browser source.</p>
+      </div>
+      <div class="host-section">
+        <h3>Effects (this device)</h3>
+        <label class="host-row toggle-row"><span>Confetti on win</span><input type="checkbox" id="local-confetti" /></label>
+        <label class="host-row toggle-row"><span>Sound effects</span><input type="checkbox" id="local-sfx" /></label>
+        <label class="host-row toggle-row"><span>Text-to-speech announcer</span><input type="checkbox" id="local-tts" /></label>
+        <label class="host-row toggle-row"><span>Reduce motion / animations</span><input type="checkbox" id="local-reducemotion" /></label>
+        <label class="host-row toggle-row"><span>Compact layout</span><input type="checkbox" id="local-compact" /></label>
+        <label class="host-row field-row"><span>TTS speaking rate</span>
+          <input type="range" id="local-ttsrate" min="0.6" max="1.6" step="0.1" /></label>
+        <label class="host-row field-row"><span>SFX volume</span>
+          <input type="range" id="local-volume" min="0" max="1" step="0.05" /></label>
+      </div>
+      <div class="host-section">
+        <button id="save-display-settings-btn" class="save-btn">Save Display Settings</button>
+      </div>
     </div>
 
-    <div class="host-section test-section">
-      <h3>Test Mode (no TikTok needed)</h3>
-      <div class="host-row">
-        <input id="test-username" placeholder="fake username" value="tester1" />
+    <!-- SYSTEM -->
+    <div class="tab-panel hidden" id="tab-system">
+      <div class="host-section">
+        <h3>Connection</h3>
+        <div class="host-row"><span>TikTok connection:</span> <span id="conn-status">-</span></div>
+        <div class="host-row"><span>Sign key on server:</span> <span id="env-status">-</span></div>
+        <div class="host-row"><button id="reconnect-btn">Force Reconnect</button></div>
       </div>
-      <div class="host-row">
-        <input id="test-comment" placeholder="type: joinrivaldle / a guess / !leave" />
-        <button id="test-send-btn">Send</button>
+      <div class="host-section">
+        <h3>Change Host Passcode</h3>
+        <div class="host-row">
+          <input id="new-passcode" type="password" placeholder="New passcode (min 4 chars)" />
+          <button id="change-passcode-btn">Change</button>
+        </div>
+      </div>
+      <div class="host-section test-section">
+        <h3>Test Mode (no TikTok needed)</h3>
+        <div class="host-row">
+          <input id="test-username" placeholder="fake username" value="tester1" />
+        </div>
+        <div class="host-row">
+          <input id="test-comment" placeholder="type: joinrivaldle / a guess / !leave" />
+          <button id="test-send-btn">Send</button>
+        </div>
+      </div>
+      <div class="host-section">
+        <h3>Recent Activity</h3>
+        <div id="event-log"></div>
       </div>
     </div>
 
-    <button id="close-panel-btn">Close</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

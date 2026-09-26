@@ -1,15 +1,16 @@
 /**
  * RIVALDLE - server.js
  * -----------------------------------------------------------------------
- * This one file runs the whole game:
+ * Runs the whole game:
  *  - Connects to your TikTok LIVE chat
- *  - Runs the lobby / active-game / round-over state machine
+ *  - Runs the lobby / active-game / round-over / match-over state machine
  *  - Validates 5-letter Wordle guesses against a real dictionary
+ *  - Fully configurable via the in-app Host Settings panel (gear icon).
+ *    Every setting is saved to disk in /data/settings.json so it survives
+ *    server restarts.
  *  - Pushes live updates to the browser page (public/index.html) over
- *    Socket.IO, which is the page you screen-share on your phone.
- *
- * You should NOT need to edit this file. Everything you configure lives
- * in Environment Variables (see README.md).
+ *    Socket.IO, which is the page you screen-share / add as an OBS
+ *    Browser Source.
  * -----------------------------------------------------------------------
  */
 
@@ -21,16 +22,20 @@ const { Server } = require('socket.io');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
 // ---------------------------------------------------------------------
-// CONFIG (from Render environment variables)
+// CONFIG (from Render / hosting environment variables — these are just
+// the STARTUP DEFAULTS. Almost everything below can be changed live
+// from the Host Settings panel without redeploying.)
 // ---------------------------------------------------------------------
 const PORT = process.env.PORT || 3000;
 const TIKTOK_USERNAME = (process.env.TIKTOK_USERNAME || '').replace(/^@/, '');
 const EULER_KEY = process.env.EULER_KEY || '';
-const HOST_PASSCODE = process.env.HOST_PASSCODE || '1234';
+const DEFAULT_HOST_PASSCODE = process.env.HOST_PASSCODE || '1234';
+
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA_FILE = path.join(DATA_DIR, 'settings.json');
 
 // ---------------------------------------------------------------------
-// DICTIONARY: build a Set of valid 5-letter words from the "word-list"
-// npm package (a big list of real English words), used to validate guesses.
+// DICTIONARY
 // ---------------------------------------------------------------------
 const VALID_WORDS = new Set();
 try {
@@ -47,9 +52,6 @@ try {
   console.error('Could not load word-list dictionary:', err.message);
 }
 
-// A curated pool of common, TV-friendly 5-letter words used as SECRET
-// answers (kept separate from the big validation dictionary so the
-// answers are always common, recognizable words).
 const ANSWER_WORDS = [
   'about','above','abuse','actor','acute','admit','adopt','adult','after','again',
   'agent','agree','ahead','alarm','album','alert','alike','alive','allow','alone',
@@ -104,15 +106,108 @@ const ANSWER_WORDS = [
   'yield','young','youth'
 ];
 
-function pickSecretWord() {
-  return ANSWER_WORDS[Math.floor(Math.random() * ANSWER_WORDS.length)];
+function pickSecretWord(exclude) {
+  let word;
+  do {
+    word = ANSWER_WORDS[Math.floor(Math.random() * ANSWER_WORDS.length)];
+  } while (ANSWER_WORDS.length > 1 && word === exclude);
+  return word;
+}
+
+// ---------------------------------------------------------------------
+// CONSTANTS
+// ---------------------------------------------------------------------
+const TEAMS = ['red', 'blue', 'green', 'yellow'];
+
+// Costume roster. Each class only controls how the character is drawn
+// client-side (robe color pattern + headwear silhouette) — your real
+// TikTok circular profile photo is always used as the character's head.
+const CHARACTER_CLASSES = {
+  samurai:  { label: 'Samurai' },
+  sorcerer: { label: 'Sorcerer' },
+  explorer: { label: 'Explorer' },
+  cleric:   { label: 'Cleric' },
+  ninja:    { label: 'Ninja' },
+  robot:    { label: 'Robot' },
+  pirate:   { label: 'Pirate' },
+  astronaut:{ label: 'Astronaut' }
+};
+
+const THEME_SKINS = ['neon-city', 'midnight', 'sunset', 'forest', 'minimal-light'];
+
+function defaultSettings() {
+  return {
+    hostPasscode: DEFAULT_HOST_PASSCODE,
+
+    // Chat command triggers
+    joinCommand: 'joinrivaldle',
+    leaveCommand: '!leave',
+    subCommand: '!substitute',
+
+    // Core rules
+    subbingEnabled: true,
+    maxGuessesPerRound: 6,       // 0 = unlimited
+    roundTimeLimitSeconds: 0,    // 0 = no timer
+    hardMode: false,
+    autoResetDelaySeconds: 10,
+    maxRoundsPerMatch: 0,        // 0 = unlimited, match never ends automatically
+    winPoints: 10,
+
+    // Team identity
+    teamNames: { red: 'Team Red', blue: 'Team Blue', green: 'Team Green', yellow: 'Team Yellow' },
+    teamClasses: { red: 'samurai', blue: 'sorcerer', green: 'explorer', yellow: 'cleric' },
+
+    // Presentation defaults (suggested to viewers; each viewer can still
+    // override sound/theme locally on their own device/OBS source)
+    themeSkin: 'neon-city',
+    confettiEnabled: true,
+    ttsEnabled: true,
+    soundEffectsEnabled: true
+  };
+}
+
+function loadPersisted() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      return {
+        settings: Object.assign(defaultSettings(), raw.settings || {}, {
+          teamNames: Object.assign(defaultSettings().teamNames, (raw.settings || {}).teamNames || {}),
+          teamClasses: Object.assign(defaultSettings().teamClasses, (raw.settings || {}).teamClasses || {})
+        }),
+        scores: Object.assign({ red: 0, blue: 0, green: 0, yellow: 0 }, raw.scores || {}),
+        roundsPlayed: raw.roundsPlayed || 0
+      };
+    }
+  } catch (err) {
+    console.error('Could not read data/settings.json, using defaults:', err.message);
+  }
+  return { settings: defaultSettings(), scores: { red: 0, blue: 0, green: 0, yellow: 0 }, roundsPlayed: 0 };
+}
+
+let savePending = false;
+function persist() {
+  if (savePending) return;
+  savePending = true;
+  setTimeout(() => {
+    savePending = false;
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(DATA_FILE, JSON.stringify({
+        settings: state.settings,
+        scores: state.scores,
+        roundsPlayed: state.roundsPlayed
+      }, null, 2));
+    } catch (err) {
+      console.error('Could not save data/settings.json:', err.message);
+    }
+  }, 250); // debounce rapid-fire changes
 }
 
 // ---------------------------------------------------------------------
 // GAME STATE
 // ---------------------------------------------------------------------
-const TEAMS = ['red', 'blue', 'green', 'yellow'];
-const CHARACTERS = { red: 'Samurai', blue: 'Sorcerer', green: 'Explorer', yellow: 'Cleric' };
+const persisted = loadPersisted();
 
 function emptyPlayers() {
   return { red: null, blue: null, green: null, yellow: null };
@@ -120,36 +215,59 @@ function emptyPlayers() {
 function emptyBoards() {
   return { red: [], blue: [], green: [], yellow: [] };
 }
+function emptyLocked() {
+  return { red: false, blue: false, green: false, yellow: false };
+}
 
 const state = {
-  status: 'lobby', // 'lobby' | 'active' | 'roundover'
+  status: 'lobby', // 'lobby' | 'active' | 'roundover' | 'matchover'
   players: emptyPlayers(),
   boards: emptyBoards(),
-  secretWord: pickSecretWord(),
+  locked: emptyLocked(),
+  secretWord: null,
+  forcedNextWord: null,
   paused: false,
-  subbingEnabled: true,
   tiktokConnected: false,
   envKeyPresent: !!EULER_KEY,
-  lastWinner: null
+  lastWinner: null,
+  scores: persisted.scores,
+  roundsPlayed: persisted.roundsPlayed,
+  settings: persisted.settings,
+  roundEndsAt: null,
+  eventLog: [] // small rolling log shown in host panel ("X joined", "Y guessed...")
 };
+state.secretWord = pickSecretWord();
+
+let roundTimer = null;
+let resetTimer = null;
+
+function log(msg) {
+  state.eventLog.unshift({ t: Date.now(), msg });
+  state.eventLog = state.eventLog.slice(0, 30);
+}
 
 function publicState() {
-  // Never send the secret word to the client while the round is active.
   return {
     status: state.status,
     players: state.players,
     boards: state.boards,
+    locked: state.locked,
     paused: state.paused,
-    subbingEnabled: state.subbingEnabled,
     tiktokConnected: state.tiktokConnected,
     envKeyPresent: state.envKeyPresent,
-    secretWord: state.status === 'roundover' ? state.secretWord : null,
+    secretWord: (state.status === 'roundover' || state.status === 'matchover') ? state.secretWord : null,
     lastWinner: state.lastWinner,
-    characters: CHARACTERS
+    scores: state.scores,
+    roundsPlayed: state.roundsPlayed,
+    settings: state.settings,
+    characterClasses: CHARACTER_CLASSES,
+    themeSkins: THEME_SKINS,
+    roundEndsAt: state.status === 'active' ? state.roundEndsAt : null,
+    eventLog: state.eventLog
   };
 }
 
-let io; // set once the server starts
+let io;
 function broadcastState() {
   if (io) io.emit('state', publicState());
 }
@@ -158,17 +276,76 @@ function openTeams() {
   return TEAMS.filter((t) => !state.players[t]);
 }
 
+function clearTimers() {
+  if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
+  if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
+}
+
+function armRoundTimer() {
+  const secs = Number(state.settings.roundTimeLimitSeconds) || 0;
+  if (secs <= 0) { state.roundEndsAt = null; return; }
+  state.roundEndsAt = Date.now() + secs * 1000;
+  roundTimer = setTimeout(() => {
+    if (state.status === 'active') {
+      log('Time expired — round skipped.');
+      endRound(null, null);
+    }
+  }, secs * 1000 + 50);
+}
+
 function resetToLobby() {
+  clearTimers();
   state.status = 'lobby';
   state.players = emptyPlayers();
   state.boards = emptyBoards();
-  state.secretWord = pickSecretWord();
+  state.locked = emptyLocked();
+  state.roundEndsAt = null;
   state.lastWinner = null;
+  const forced = state.forcedNextWord;
+  state.secretWord = forced && VALID_WORDS.has(forced) ? forced : pickSecretWord(state.secretWord);
+  state.forcedNextWord = null;
   broadcastState();
 }
 
+// Ends the current round, optionally with a winning team/username.
+// Awards points, advances round counter, checks match-end, then either
+// shows final standings (matchover) or schedules a return to lobby.
+function endRound(team, username) {
+  clearTimers();
+  state.roundsPlayed += 1;
+  if (team) {
+    state.scores[team] = (state.scores[team] || 0) + (Number(state.settings.winPoints) || 0);
+    state.lastWinner = { team, username };
+    log(`@${username} won the round for ${state.settings.teamNames[team]}! (+${state.settings.winPoints} pts)`);
+  } else {
+    state.lastWinner = null;
+    log('Round ended with no winner.');
+  }
+  state.status = 'roundover';
+  persist();
+
+  const matchLimit = Number(state.settings.maxRoundsPerMatch) || 0;
+  const matchOver = matchLimit > 0 && state.roundsPlayed >= matchLimit;
+
+  broadcastState();
+
+  if (matchOver) {
+    resetTimer = setTimeout(() => {
+      state.status = 'matchover';
+      broadcastState();
+      resetTimer = setTimeout(() => {
+        state.scores = { red: 0, blue: 0, green: 0, yellow: 0 };
+        state.roundsPlayed = 0;
+        persist();
+        resetToLobby();
+      }, Math.max(5, Number(state.settings.autoResetDelaySeconds) || 10) * 1000);
+    }, 3000);
+  } else {
+    resetTimer = setTimeout(resetToLobby, (Number(state.settings.autoResetDelaySeconds) || 10) * 1000);
+  }
+}
+
 function scoreGuess(guess, secret) {
-  // Standard Wordle scoring, handles duplicate letters correctly.
   const result = new Array(5).fill('gray');
   const secretLetters = secret.split('');
   const guessLetters = guess.split('');
@@ -182,15 +359,41 @@ function scoreGuess(guess, secret) {
   }
   for (let i = 0; i < 5; i++) {
     if (result[i] === 'green') continue;
-    const idx = secretLetters.findIndex(
-      (ch, j) => ch === guessLetters[i] && !used[j]
-    );
+    const idx = secretLetters.findIndex((ch, j) => ch === guessLetters[i] && !used[j]);
     if (idx !== -1) {
       result[i] = 'yellow';
       used[idx] = true;
     }
   }
   return guessLetters.map((letter, i) => ({ letter, state: result[i] }));
+}
+
+// Hard mode: a team's next guess must re-use every letter already
+// revealed as green (in the same slot) and yellow (anywhere) from that
+// team's own prior guesses this round.
+function violatesHardMode(team, guess) {
+  if (!state.settings.hardMode) return null;
+  const rows = state.boards[team] || [];
+  const requiredGreen = {}; // index -> letter
+  const requiredYellow = new Set();
+  rows.forEach((row) => {
+    row.forEach((cell, i) => {
+      if (cell.state === 'green') requiredGreen[i] = cell.letter;
+      if (cell.state === 'yellow') requiredYellow.add(cell.letter);
+    });
+  });
+  for (const idxStr of Object.keys(requiredGreen)) {
+    const i = Number(idxStr);
+    if (guess[i] !== requiredGreen[i]) {
+      return `Position ${i + 1} must be "${requiredGreen[i].toUpperCase()}" (hard mode).`;
+    }
+  }
+  for (const letter of requiredYellow) {
+    if (!guess.includes(letter)) {
+      return `Guess must contain "${letter.toUpperCase()}" (hard mode).`;
+    }
+  }
+  return null;
 }
 
 function findPlayerTeam(username) {
@@ -201,15 +404,18 @@ function findPlayerTeam(username) {
 
 function joinGame(username, profilePic) {
   if (state.status !== 'lobby' || state.paused) return;
-  if (findPlayerTeam(username)) return; // already playing
+  if (findPlayerTeam(username)) return;
   const open = openTeams();
   if (open.length === 0) return;
   const team = open[Math.floor(Math.random() * open.length)];
   state.players[team] = { username, profilePic: profilePic || '' };
   state.boards[team] = [];
+  state.locked[team] = false;
+  log(`@${username} joined ${state.settings.teamNames[team]}.`);
 
   if (openTeams().length === 0) {
     state.status = 'active';
+    armRoundTimer();
   }
   broadcastState();
 }
@@ -219,14 +425,13 @@ function leaveGame(username) {
   if (!team) return;
   state.players[team] = null;
   state.boards[team] = [];
-  if (state.status === 'active') {
-    // A quadrant just opened up mid-game; game keeps running for the rest.
-  }
+  state.locked[team] = false;
+  log(`@${username} left ${state.settings.teamNames[team]}.`);
   broadcastState();
 }
 
 function substitute(username, profilePic) {
-  if (!state.subbingEnabled || state.paused) return;
+  if (!state.settings.subbingEnabled || state.paused) return;
   if (state.status !== 'active') return;
   if (findPlayerTeam(username)) return;
   const open = openTeams();
@@ -234,6 +439,8 @@ function substitute(username, profilePic) {
   const team = open[0];
   state.players[team] = { username, profilePic: profilePic || '' };
   state.boards[team] = [];
+  state.locked[team] = false;
+  log(`@${username} subbed into ${state.settings.teamNames[team]}.`);
   broadcastState();
 }
 
@@ -241,50 +448,119 @@ function handleGuess(username, guess) {
   if (state.status !== 'active' || state.paused) return;
   const team = findPlayerTeam(username);
   if (!team) return;
+  if (state.locked[team]) return; // out of guesses for this round
   const clean = guess.toLowerCase();
   if (clean.length !== 5 || !/^[a-z]+$/.test(clean)) return;
-  if (!VALID_WORDS.has(clean)) return; // not a real dictionary word, ignore
+  if (!VALID_WORDS.has(clean)) return;
+
+  if (violatesHardMode(team, clean)) return; // silently reject invalid hard-mode guess
 
   const scored = scoreGuess(clean, state.secretWord);
   state.boards[team].push(scored);
-  // Keep only the most recent 6 rows visible (older rows scroll off).
   if (state.boards[team].length > 6) {
     state.boards[team] = state.boards[team].slice(-6);
   }
 
   const won = clean === state.secretWord;
   if (won) {
-    state.status = 'roundover';
-    state.lastWinner = { team, username };
-    broadcastState();
-    setTimeout(resetToLobby, 10000);
-  } else {
-    broadcastState();
+    endRound(team, username);
+    return;
   }
+
+  // Track true guess count separately from the visible (last-6) window
+  state.players[team].guessCount = (state.players[team].guessCount || 0) + 1;
+  const limit = Number(state.settings.maxGuessesPerRound) || 0;
+  if (limit > 0 && state.players[team].guessCount >= limit) {
+    state.locked[team] = true;
+    log(`${state.settings.teamNames[team]} is out of guesses.`);
+    // If every active team is now locked, end the round with no winner.
+    const activeTeams = TEAMS.filter((t) => state.players[t]);
+    if (activeTeams.every((t) => state.locked[t])) {
+      endRound(null, null);
+      return;
+    }
+  }
+
+  broadcastState();
 }
 
 function hostKick(team) {
   if (!TEAMS.includes(team)) return;
   state.players[team] = null;
   state.boards[team] = [];
+  state.locked[team] = false;
   broadcastState();
 }
 
 function hostForceSkip() {
   if (state.status !== 'active') return;
-  state.status = 'roundover';
-  state.lastWinner = null;
-  broadcastState();
-  setTimeout(resetToLobby, 10000);
+  endRound(null, null);
 }
 
 function hostTogglePause() {
   state.paused = !state.paused;
+  log(state.paused ? 'Host paused the game.' : 'Host resumed the game.');
   broadcastState();
 }
 
-function hostToggleSubbing() {
-  state.subbingEnabled = !state.subbingEnabled;
+function hostResetScores() {
+  state.scores = { red: 0, blue: 0, green: 0, yellow: 0 };
+  state.roundsPlayed = 0;
+  persist();
+  log('Host reset the scoreboard.');
+  broadcastState();
+}
+
+function hostSetNextWord(word) {
+  const clean = (word || '').trim().toLowerCase();
+  if (clean.length !== 5 || !/^[a-z]+$/.test(clean)) return { ok: false, error: 'Must be exactly 5 letters, A-Z only.' };
+  state.forcedNextWord = clean;
+  log('Host set a custom word for the next round.');
+  return { ok: true };
+}
+
+// Generic, validated settings patch. Only known keys / valid types are
+// applied; everything else is ignored so a bad client can't corrupt state.
+function hostUpdateSettings(patch) {
+  if (!patch || typeof patch !== 'object') return;
+  const s = state.settings;
+
+  if (typeof patch.subbingEnabled === 'boolean') s.subbingEnabled = patch.subbingEnabled;
+  if (typeof patch.hardMode === 'boolean') s.hardMode = patch.hardMode;
+  if (typeof patch.confettiEnabled === 'boolean') s.confettiEnabled = patch.confettiEnabled;
+  if (typeof patch.ttsEnabled === 'boolean') s.ttsEnabled = patch.ttsEnabled;
+  if (typeof patch.soundEffectsEnabled === 'boolean') s.soundEffectsEnabled = patch.soundEffectsEnabled;
+
+  if (Number.isFinite(patch.maxGuessesPerRound)) s.maxGuessesPerRound = Math.max(0, Math.min(20, Math.round(patch.maxGuessesPerRound)));
+  if (Number.isFinite(patch.roundTimeLimitSeconds)) s.roundTimeLimitSeconds = Math.max(0, Math.min(3600, Math.round(patch.roundTimeLimitSeconds)));
+  if (Number.isFinite(patch.autoResetDelaySeconds)) s.autoResetDelaySeconds = Math.max(3, Math.min(120, Math.round(patch.autoResetDelaySeconds)));
+  if (Number.isFinite(patch.maxRoundsPerMatch)) s.maxRoundsPerMatch = Math.max(0, Math.min(500, Math.round(patch.maxRoundsPerMatch)));
+  if (Number.isFinite(patch.winPoints)) s.winPoints = Math.max(0, Math.min(1000, Math.round(patch.winPoints)));
+
+  if (typeof patch.joinCommand === 'string' && patch.joinCommand.trim()) s.joinCommand = patch.joinCommand.trim().toLowerCase().slice(0, 30);
+  if (typeof patch.leaveCommand === 'string' && patch.leaveCommand.trim()) s.leaveCommand = patch.leaveCommand.trim().toLowerCase().slice(0, 30);
+  if (typeof patch.subCommand === 'string' && patch.subCommand.trim()) s.subCommand = patch.subCommand.trim().toLowerCase().slice(0, 30);
+
+  if (THEME_SKINS.includes(patch.themeSkin)) s.themeSkin = patch.themeSkin;
+
+  if (patch.teamNames && typeof patch.teamNames === 'object') {
+    TEAMS.forEach((t) => {
+      const v = patch.teamNames[t];
+      if (typeof v === 'string' && v.trim()) s.teamNames[t] = v.trim().slice(0, 24);
+    });
+  }
+  if (patch.teamClasses && typeof patch.teamClasses === 'object') {
+    TEAMS.forEach((t) => {
+      const v = patch.teamClasses[t];
+      if (typeof v === 'string' && CHARACTER_CLASSES[v]) s.teamClasses[t] = v;
+    });
+  }
+  if (typeof patch.newHostPasscode === 'string' && patch.newHostPasscode.trim().length >= 4) {
+    s.hostPasscode = patch.newHostPasscode.trim().slice(0, 40);
+  }
+
+  persist();
+  log('Host updated settings.');
   broadcastState();
 }
 
@@ -294,49 +570,44 @@ function hostToggleSubbing() {
 function handleChatMessage(username, comment, profilePic) {
   const text = (comment || '').trim();
   const lower = text.toLowerCase();
+  const s = state.settings;
 
-  if (lower === 'joinrivaldle') {
-    joinGame(username, profilePic);
-    return;
-  }
-  if (lower === '!leave') {
-    leaveGame(username);
-    return;
-  }
-  if (lower === '!substitute') {
-    substitute(username, profilePic);
-    return;
-  }
-  if (/^[a-zA-Z]{5}$/.test(text)) {
-    handleGuess(username, text);
-  }
+  if (lower === s.joinCommand) { joinGame(username, profilePic); return; }
+  if (lower === s.leaveCommand) { leaveGame(username); return; }
+  if (lower === s.subCommand) { substitute(username, profilePic); return; }
+  if (/^[a-zA-Z]{5}$/.test(text)) { handleGuess(username, text); }
 }
 
 // ---------------------------------------------------------------------
 // TIKTOK LIVE CONNECTION
 // ---------------------------------------------------------------------
+let tiktokConnection = null;
+let tiktokRetryTimer = null;
+
 function connectToTikTok() {
   if (!TIKTOK_USERNAME) {
     console.error('TIKTOK_USERNAME is not set - cannot connect to TikTok LIVE.');
     return;
   }
+  if (tiktokRetryTimer) { clearTimeout(tiktokRetryTimer); tiktokRetryTimer = null; }
 
   const connection = new WebcastPushConnection(TIKTOK_USERNAME, {
     signConfig: EULER_KEY ? { apiKey: EULER_KEY } : undefined
   });
+  tiktokConnection = connection;
 
   connection.connect()
     .then(() => {
       console.log(`Connected to @${TIKTOK_USERNAME}'s TikTok LIVE.`);
       state.tiktokConnected = true;
+      log('Connected to TikTok LIVE.');
       broadcastState();
     })
     .catch((err) => {
       console.error('Failed to connect to TikTok LIVE:', err.message);
       state.tiktokConnected = false;
       broadcastState();
-      // Retry in 15 seconds if the stream isn't live yet.
-      setTimeout(connectToTikTok, 15000);
+      tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
     });
 
   connection.on('chat', (data) => {
@@ -346,9 +617,17 @@ function connectToTikTok() {
   connection.on('disconnected', () => {
     console.log('Disconnected from TikTok LIVE, retrying...');
     state.tiktokConnected = false;
+    log('Disconnected from TikTok LIVE. Retrying...');
     broadcastState();
-    setTimeout(connectToTikTok, 15000);
+    tiktokRetryTimer = setTimeout(connectToTikTok, 15000);
   });
+}
+
+function hostReconnectTikTok() {
+  try { if (tiktokConnection) tiktokConnection.disconnect(); } catch (e) { /* ignore */ }
+  if (tiktokRetryTimer) { clearTimeout(tiktokRetryTimer); tiktokRetryTimer = null; }
+  log('Host forced a TikTok reconnect.');
+  connectToTikTok();
 }
 
 // ---------------------------------------------------------------------
@@ -360,38 +639,36 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 io = new Server(server);
 
+function checkPasscode(msg) {
+  return msg && msg.passcode === state.settings.hostPasscode;
+}
+
 io.on('connection', (socket) => {
   socket.emit('state', publicState());
 
   socket.on('hostAction', (msg) => {
-    if (!msg || msg.passcode !== HOST_PASSCODE) {
-      socket.emit('hostAuthFailed');
-      return;
-    }
+    if (!checkPasscode(msg)) { socket.emit('hostAuthFailed'); return; }
     switch (msg.action) {
-      case 'kick':
-        hostKick(msg.team);
+      case 'kick': hostKick(msg.team); break;
+      case 'forceSkip': hostForceSkip(); break;
+      case 'togglePause': hostTogglePause(); break;
+      case 'toggleSubbing': hostUpdateSettings({ subbingEnabled: !state.settings.subbingEnabled }); break;
+      case 'resetScores': hostResetScores(); break;
+      case 'reconnectTikTok': hostReconnectTikTok(); break;
+      case 'updateSettings': hostUpdateSettings(msg.patch); break;
+      case 'setNextWord': {
+        const res = hostSetNextWord(msg.word);
+        socket.emit('hostActionResult', res);
         break;
-      case 'forceSkip':
-        hostForceSkip();
-        break;
-      case 'togglePause':
-        hostTogglePause();
-        break;
-      case 'toggleSubbing':
-        hostToggleSubbing();
-        break;
-      default:
-        break;
+      }
+      default: break;
     }
   });
 
-  // Lets you test the game from a browser without TikTok, useful while
-  // setting things up. Type these into your own browser console, or
-  // use the small "TEST MODE" box in the settings panel.
+  // Lets you test the game from a browser without TikTok.
   socket.on('testChat', (msg) => {
-    if (!msg || msg.passcode !== HOST_PASSCODE) return;
-    handleChatMessage(msg.username || 'tester', msg.comment || '', '');
+    if (!checkPasscode(msg)) return;
+    handleChatMessage(msg.username || 'tester', msg.comment || '', msg.profilePic || '');
   });
 });
 

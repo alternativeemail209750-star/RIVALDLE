@@ -4,8 +4,11 @@ This folder is a complete, ready-to-run app. You do not need to write or edit
 any code. Just follow these steps in order.
 
 ## What's inside
-- `server.js` - the game "brain" (reads TikTok chat, runs the game)
-- `public/` - the screen you will share on TikTok LIVE
+- `server.js` - the game "brain" (reads TikTok chat, runs the game, stores settings)
+- `public/` - the screen you will share on TikTok LIVE, including the full
+  in-app **Host Settings** panel
+- `data/` - where your settings and scoreboard are saved automatically
+  between restarts (created for you; nothing to touch)
 - `package.json` - tells the server what software it needs
 
 ---
@@ -18,7 +21,7 @@ any code. Just follow these steps in order.
    click **Create repository**.
 4. On the new repository page, click **uploading an existing file**.
 5. Drag in every file and folder from this download (including the `public`
-   folder). Click **Commit changes**.
+   and `data` folders). Click **Commit changes**.
 
 ## STEP 2: Get your Euler Key (needed to read TikTok LIVE chat)
 
@@ -51,6 +54,11 @@ from them to read TikTok LIVE chat reliably.)
 5. Click **Create Web Service**. Render will now build your app - this takes
    a couple of minutes the first time.
 
+   > If Render ever shows a build error naming an npm package/version it
+   > can't find, that specific version was probably removed or renamed
+   > upstream. Check `package.json`'s `dependencies` and update just that
+   > one version number to the current release.
+
 ## STEP 4: Add your Environment Variables
 
 Still on Render, open your new service → click **Environment** in the left
@@ -60,9 +68,16 @@ menu → **Add Environment Variable**, and add these one at a time:
 |---|---|
 | `TIKTOK_USERNAME` | your TikTok username, no `@` (e.g. `johndoe123`) |
 | `EULER_KEY` | the key you copied in Step 2 |
-| `HOST_PASSCODE` | any password you'll remember, used to unlock the settings panel |
+| `HOST_PASSCODE` | any password you'll remember, used to unlock the settings panel (you can also change it later from inside the app) |
 
 Click **Save Changes** - Render will automatically restart your app.
+
+> **Tip:** on Render's free tier, the filesystem resets on every redeploy, so
+> anything saved in `data/settings.json` (your custom settings, team names,
+> and scoreboard) will reset to defaults when you redeploy. If you want your
+> settings to survive redeploys, add a **Render Disk** mounted at `/data`
+> in your service's Settings → Disks. This is optional - the game works
+> fine without it.
 
 ## STEP 5: Open your game on your phone
 
@@ -73,45 +88,101 @@ Click **Save Changes** - Render will automatically restart your app.
 3. Go live on TikTok, choose **Mobile Gaming / Screen Share** in TikTok's
    LIVE setup, and share your browser showing that page.
 
+---
+
 ## Using the Host Settings Panel
 
-- **Press and hold the "RIVALDLE" title for about 1 second** - a settings
-  panel will slide out from the right.
-- Type the passcode you set in Step 4 into the box at the top before using
-  any button (kick, force skip, pause, toggle subbing).
-- There's also a **Test Mode** box at the bottom of the panel, so you can
-  try out "joinrivaldle", guesses, and "!leave" yourself before ever going
-  live - no TikTok connection needed for that.
-- Tap **Close** to hide the panel again before you go live.
+- Tap the **⚙ gear icon** in the top-right of the header - a settings panel
+  slides out from the right.
+- Type your host passcode into the box at the top before using any control.
+- The panel has four tabs:
+
+### Game Rules tab
+- **Quick actions:** kick any team, force-skip the current round, pause /
+  resume the whole game, reset the scoreboard to zero.
+- **Rules:** toggle chat substitutions on/off, toggle **Hard Mode** (players
+  must reuse every green/yellow clue they've already found), set a **max
+  guesses per round** (locks a team out once they run out, 0 = unlimited),
+  a **round timer** in seconds (0 = no timer; the round auto-skips when time
+  runs out), how many seconds pass before the next round auto-starts, how
+  many **points** a round win is worth, and how many rounds make up a
+  "match" (0 = the scoreboard just runs forever; if you set e.g. 5, a final
+  standings screen appears after round 5 and the scoreboard then resets for
+  a fresh match).
+- **Chat Commands:** change the exact text viewers type to join / leave /
+  substitute, in case `joinrivaldle` collides with something else in your
+  chat.
+- **Custom Next Word:** type any 5-letter word and it becomes the answer for
+  the *next* round only (great for planned reveals or sponsor tie-ins).
+
+### Teams & Avatars tab
+- Rename each team (shown on the scoreboard and in on-screen text).
+- Pick a **costume class** per team from: Samurai, Sorcerer, Explorer,
+  Cleric, Ninja, Robot, Pirate, Astronaut. Whichever a player's real,
+  circular TikTok profile photo becomes their character's head automatically
+  the instant they join - the costume just changes the robe color and
+  headwear around it.
+
+### Display & Audio tab
+- Pick a **theme skin** (Neon City, Midnight, Sunset, Forest, Minimal
+  Light) - this is shared with everyone watching this browser page.
+- Everything else here (confetti, sound effects, text-to-speech announcer,
+  reduced motion, compact layout, TTS speaking rate, SFX volume) is saved
+  **only on this device/browser**, so you can run different display
+  preferences on your phone vs. a laptop OBS source without them fighting
+  each other.
+
+### System tab
+- See your live TikTok connection status and force a reconnect.
+- Change your host passcode.
+- **Test Mode:** simulate chat messages (`joinrivaldle`, a 5-letter guess,
+  `!leave`, etc.) without needing to be live on TikTok at all - perfect for
+  rehearsing before you go live.
+- A rolling **activity log** of joins, subs, wins, and host actions.
+
+Tap the **✕** in the panel header to close it again before you go live.
+
+---
 
 ## How the game works (quick recap)
 
-- Viewers type `joinrivaldle` in chat to join - first 4 people get randomly
-  placed into Red/Blue/Green/Yellow.
-- Once all 4 spots are filled, the round starts automatically.
-- Each player just types 5-letter word guesses in chat - their own board
-  updates live.
-- First to guess the secret word wins the round; the app announces it out
-  loud, shows the word, and resets to the lobby after 10 seconds.
+- Viewers type your join command (default `joinrivaldle`) in chat to join -
+  the first 4 people get randomly placed into Red/Blue/Green/Yellow, each
+  shown as a costumed character wearing that player's own circular TikTok
+  profile photo as the head.
+- Once all 4 spots are filled, the round starts automatically (and the round
+  timer, if you set one, starts counting down).
+- Each player types 5-letter word guesses in chat - their own board updates
+  live, with a little sound and pulse animation on every guess.
+- First to guess the secret word wins the round: confetti falls, the
+  announcer speaks it aloud (if TTS is on), the word is revealed, points are
+  awarded, and it resets to the lobby after your configured delay.
+- If nobody guesses it before the timer runs out (or everyone hits the max
+  guess limit), the round ends with no winner and the word is revealed.
 - `!leave` frees up a player's spot any time; `!substitute` lets any other
-  viewer grab an open spot (you can turn this off from the settings panel).
+  viewer grab an open spot (toggle this off from the settings panel if you'd
+  rather keep the same 4 players all match).
 - If someone goes AFK or is trolling, use the **Kick** buttons in the
   settings panel - there is no automatic kicking.
+- The scoreboard persists across rounds; set **rounds per match** if you want
+  it to automatically show final standings and reset periodically.
 
 ## If something doesn't connect
 
 - **"TikTok connection: Disconnected"** in the settings panel usually means
   you are not currently live on TikTok, your `TIKTOK_USERNAME` is misspelled,
   or your Eulerstream key needs attention. The app automatically keeps
-  retrying every 15 seconds.
-- **"Euler key on server: Missing"** means the `EULER_KEY` environment
+  retrying every 15 seconds - or tap **Force Reconnect** in the System tab.
+- **"Sign key on server: Missing"** means the `EULER_KEY` environment
   variable wasn't saved correctly on Render - double check Step 4.
 - Render's free tier can take ~30-60 seconds to "wake up" if it's been idle;
   open the URL once, wait a bit, then start your TikTok LIVE.
 
-## Changing the secret words or team names
+## Changing the secret word pool
 
 Everything is designed to just work as-is, but if you ever want to tweak the
-list of secret words, they're in `server.js` near the top, in a section
-labeled `ANSWER_WORDS`. You (or anyone helping you) can add or remove words
-from that list - no other changes needed.
+list of possible secret words, they're in `server.js` near the top, in a
+section labeled `ANSWER_WORDS`. You (or anyone helping you) can add or remove
+words from that list - no other changes needed. For a one-off word, use the
+**Custom Next Word** field in the Host Settings panel instead - no code
+editing required.
