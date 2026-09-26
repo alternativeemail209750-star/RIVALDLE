@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Rivaldle</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- ZONE 1: HEADER -->
+    <header id="header">
+      <h1 id="title">RIVALDLE</h1>
+      <p id="status-text">Lobby: Waiting for Players (0/4)</p>
+    </header>
+
+    <!-- ZONE 2: 2x2 ARENA -->
+    <main id="arena">
+      <div class="quadrant" data-team="red">
+        <div class="char-body char-red">
+          <img class="avatar" id="avatar-red" src="" alt="" />
+        </div>
+        <div class="username" id="username-red">OPEN</div>
+        <div class="board" id="board-red"></div>
+      </div>
+
+      <div class="quadrant" data-team="blue">
+        <div class="char-body char-blue">
+          <img class="avatar" id="avatar-blue" src="" alt="" />
+        </div>
+        <div class="username" id="username-blue">OPEN</div>
+        <div class="board" id="board-blue"></div>
+      </div>
+
+      <div class="quadrant" data-team="green">
+        <div class="char-body char-green">
+          <img class="avatar" id="avatar-green" src="" alt="" />
+        </div>
+        <div class="username" id="username-green">OPEN</div>
+        <div class="board" id="board-green"></div>
+      </div>
+
+      <div class="quadrant" data-team="yellow">
+        <div class="char-body char-yellow">
+          <img class="avatar" id="avatar-yellow" src="" alt="" />
+        </div>
+        <div class="username" id="username-yellow">OPEN</div>
+        <div class="board" id="board-yellow"></div>
+      </div>
+    </main>
+
+    <!-- ZONE 3: FOOTER / INSTRUCTIONS -->
+    <footer id="footer">
+      <p id="instructions">Type "joinrivaldle" to play! (Limit: 4 Players)</p>
+    </footer>
+
+  </div>
+
+  <!-- WINNER OVERLAY -->
+  <div id="winner-overlay" class="hidden">
+    <div id="winner-box">
+      <div id="winner-text"></div>
+      <div id="winner-word"></div>
+    </div>
+  </div>
+
+  <!-- HOST SETTINGS PANEL (hidden by default; long-press the title to open) -->
+  <div id="host-panel" class="hidden">
+    <h2>Host Settings</h2>
+
+    <div class="host-row">
+      <input id="host-passcode" type="password" placeholder="Host passcode" />
+    </div>
+
+    <div class="host-section">
+      <h3>Quick Actions</h3>
+      <div class="host-row">
+        <button class="kick-btn" data-team="red">Kick Red</button>
+        <button class="kick-btn" data-team="blue">Kick Blue</button>
+      </div>
+      <div class="host-row">
+        <button class="kick-btn" data-team="green">Kick Green</button>
+        <button class="kick-btn" data-team="yellow">Kick Yellow</button>
+      </div>
+      <div class="host-row">
+        <button id="force-skip-btn">Force Skip Round</button>
+        <button id="pause-btn">Pause / Resume</button>
+      </div>
+    </div>
+
+    <div class="host-section">
+      <h3>Rules</h3>
+      <div class="host-row">
+        <button id="toggle-subbing-btn">Enable / Disable Subbing</button>
+      </div>
+    </div>
+
+    <div class="host-section">
+      <h3>System</h3>
+      <div class="host-row"><span>TikTok connection:</span> <span id="conn-status">-</span></div>
+      <div class="host-row"><span>Euler key on server:</span> <span id="env-status">-</span></div>
+    </div>
+
+    <div class="host-section test-section">
+      <h3>Test Mode (no TikTok needed)</h3>
+      <div class="host-row">
+        <input id="test-username" placeholder="fake username" value="tester1" />
+      </div>
+      <div class="host-row">
+        <input id="test-comment" placeholder="type: joinrivaldle / a guess / !leave" />
+        <button id="test-send-btn">Send</button>
+      </div>
+    </div>
+
+    <button id="close-panel-btn">Close</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
