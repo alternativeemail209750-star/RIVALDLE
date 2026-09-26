@@ -334,8 +334,6 @@ const hostPanel = document.getElementById('host-panel');
 document.getElementById('gear-btn').addEventListener('click', () => hostPanel.classList.remove('hidden'));
 document.getElementById('close-panel-btn').addEventListener('click', () => hostPanel.classList.add('hidden'));
 
-function passcode() { return document.getElementById('host-passcode').value; }
-
 // tabs
 document.querySelectorAll('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -349,25 +347,23 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // quick actions
 document.querySelectorAll('.kick-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    socket.emit('hostAction', { passcode: passcode(), action: 'kick', team: btn.dataset.team });
+    socket.emit('hostAction', { action: 'kick', team: btn.dataset.team });
   });
 });
 document.getElementById('force-skip-btn').addEventListener('click', () => {
-  socket.emit('hostAction', { passcode: passcode(), action: 'forceSkip' });
+  socket.emit('hostAction', { action: 'forceSkip' });
 });
 document.getElementById('pause-btn').addEventListener('click', () => {
-  socket.emit('hostAction', { passcode: passcode(), action: 'togglePause' });
+  socket.emit('hostAction', { action: 'togglePause' });
 });
 document.getElementById('reset-scores-btn').addEventListener('click', () => {
   if (confirm('Reset the scoreboard to 0 for all teams?')) {
-    socket.emit('hostAction', { passcode: passcode(), action: 'resetScores' });
+    socket.emit('hostAction', { action: 'resetScores' });
   }
 });
 document.getElementById('reconnect-btn').addEventListener('click', () => {
-  socket.emit('hostAction', { passcode: passcode(), action: 'reconnectTikTok' });
+  socket.emit('hostAction', { action: 'reconnectTikTok' });
 });
-
-socket.on('hostAuthFailed', () => alert('Wrong host passcode.'));
 
 // -----------------------------------------------------------------
 // MODE SWITCH (Test / Live / Offline)
@@ -376,7 +372,7 @@ document.querySelectorAll('.mode-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     const mode = btn.dataset.mode;
     if (mode === 'live' && !confirm('Switch to LIVE mode? This connects to your real TikTok LIVE chat.')) return;
-    socket.emit('hostAction', { passcode: passcode(), action: 'setGameMode', mode });
+    socket.emit('hostAction', { action: 'setGameMode', mode });
   });
 });
 
@@ -405,7 +401,7 @@ document.getElementById('offline-guess').addEventListener('keydown', (e) => {
 // custom next word
 document.getElementById('next-word-btn').addEventListener('click', () => {
   const word = document.getElementById('next-word-input').value;
-  socket.emit('hostAction', { passcode: passcode(), action: 'setNextWord', word });
+  socket.emit('hostAction', { action: 'setNextWord', word });
 });
 socket.on('hostActionResult', (res) => {
   const msg = document.getElementById('next-word-msg');
@@ -413,20 +409,11 @@ socket.on('hostActionResult', (res) => {
   msg.style.color = res.ok ? '#8de08d' : '#ff9a9a';
 });
 
-// change passcode
-document.getElementById('change-passcode-btn').addEventListener('click', () => {
-  const val = document.getElementById('new-passcode').value;
-  if (!val || val.length < 4) { alert('New passcode must be at least 4 characters.'); return; }
-  socket.emit('hostAction', { passcode: passcode(), action: 'updateSettings', patch: { newHostPasscode: val } });
-  document.getElementById('new-passcode').value = '';
-  alert('Passcode changed. Use the new passcode from now on.');
-});
-
 // test mode
 document.getElementById('test-send-btn').addEventListener('click', () => {
   const username = document.getElementById('test-username').value || 'tester';
   const comment = document.getElementById('test-comment').value || '';
-  socket.emit('testChat', { passcode: passcode(), username, comment });
+  socket.emit('testChat', { username, comment });
   document.getElementById('test-comment').value = '';
 });
 
@@ -496,7 +483,7 @@ document.getElementById('save-game-settings-btn').addEventListener('click', () =
     leaveCommand: document.getElementById('setting-leavecmd').value,
     subCommand: document.getElementById('setting-subcmd').value
   };
-  socket.emit('hostAction', { passcode: passcode(), action: 'updateSettings', patch });
+  socket.emit('hostAction', { action: 'updateSettings', patch });
 });
 
 document.getElementById('save-team-settings-btn').addEventListener('click', () => {
@@ -505,7 +492,7 @@ document.getElementById('save-team-settings-btn').addEventListener('click', () =
     teamNames[t] = document.getElementById(`teamname-${t}`).value;
     teamClasses[t] = document.getElementById(`teamclass-${t}`).value;
   });
-  socket.emit('hostAction', { passcode: passcode(), action: 'updateSettings', patch: { teamNames, teamClasses } });
+  socket.emit('hostAction', { action: 'updateSettings', patch: { teamNames, teamClasses } });
 });
 
 document.getElementById('save-display-settings-btn').addEventListener('click', () => {
@@ -522,5 +509,5 @@ document.getElementById('save-display-settings-btn').addEventListener('click', (
   applyLocalToDom();
 
   const themeSkin = document.getElementById('setting-theme').value;
-  socket.emit('hostAction', { passcode: passcode(), action: 'updateSettings', patch: { themeSkin } });
+  socket.emit('hostAction', { action: 'updateSettings', patch: { themeSkin } });
 });

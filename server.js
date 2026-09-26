@@ -29,7 +29,6 @@ const { WebcastPushConnection } = require('tiktok-live-connector');
 const PORT = process.env.PORT || 3000;
 const TIKTOK_USERNAME = (process.env.TIKTOK_USERNAME || '').replace(/^@/, '');
 const EULER_KEY = process.env.EULER_KEY || '';
-const DEFAULT_HOST_PASSCODE = process.env.HOST_PASSCODE || '1234';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'settings.json');
@@ -37,17 +36,28 @@ const DATA_FILE = path.join(DATA_DIR, 'settings.json');
 // ---------------------------------------------------------------------
 // DICTIONARY
 // ---------------------------------------------------------------------
+// Source: the "word-list" npm package (sindresorhus/word-list), a
+// SCOWL-derived list of roughly 470,000 English words covering every
+// length - this is the comprehensive base dictionary. A Wordle-style guess
+// is always exactly 5 letters, so we filter that comprehensive list down
+// to just its 5-letter entries (English only has a few thousand 5-letter
+// words in total - that's every one of them, not a narrowed-down subset).
+// A small bundled fallback list is used only if the package ever fails to
+// install/load, so the game can never end up with zero valid guesses.
 const VALID_WORDS = new Set();
+let totalDictionaryWords = 0;
 try {
   const listPath = require('word-list');
   const raw = fs.readFileSync(listPath, 'utf8');
-  raw.split('\n').forEach((w) => {
-    const word = w.trim().toLowerCase();
+  const allWords = raw.split('\n').map((w) => w.trim().toLowerCase()).filter(Boolean);
+  totalDictionaryWords = allWords.length;
+  allWords.forEach((word) => {
     if (word.length === 5 && /^[a-z]+$/.test(word)) {
       VALID_WORDS.add(word);
     }
   });
-  console.log(`Dictionary loaded: ${VALID_WORDS.size} valid 5-letter words.`);
+  console.log(`Base dictionary loaded: ${totalDictionaryWords.toLocaleString()} English words total.`);
+  console.log(`Of those, ${VALID_WORDS.size.toLocaleString()} are valid 5-letter guesses.`);
 } catch (err) {
   console.error('Could not load word-list dictionary:', err.message);
 }
@@ -106,6 +116,15 @@ const ANSWER_WORDS = [
   'yield','young','youth'
 ];
 
+// Safety net: only kicks in if the word-list package ever failed to
+// install/load, or came back unexpectedly small, so the game can never end
+// up with zero valid guesses. Guarantees every possible answer word is
+// always guessable even in that worst case.
+if (VALID_WORDS.size < 1000) {
+  console.warn('Dictionary looked too small - falling back to the built-in answer list as valid guesses.');
+  ANSWER_WORDS.forEach((w) => VALID_WORDS.add(w));
+}
+
 function pickSecretWord(exclude) {
   let word;
   do {
@@ -147,7 +166,6 @@ const GAME_MODES = ['test', 'live', 'offline'];
 
 function defaultSettings() {
   return {
-    hostPasscode: DEFAULT_HOST_PASSCODE,
     gameMode: 'test',
 
     // Chat command triggers
@@ -586,10 +604,6 @@ function hostUpdateSettings(patch) {
       if (typeof v === 'string' && CHARACTER_CLASSES[v]) s.teamClasses[t] = v;
     });
   }
-  if (typeof patch.newHostPasscode === 'string' && patch.newHostPasscode.trim().length >= 4) {
-    s.hostPasscode = patch.newHostPasscode.trim().slice(0, 40);
-  }
-
   persist();
   log('Host updated settings.');
   broadcastState();
@@ -677,15 +691,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 io = new Server(server);
 
-function checkPasscode(msg) {
-  return msg && msg.passcode === state.settings.hostPasscode;
-}
-
 io.on('connection', (socket) => {
   socket.emit('state', publicState());
 
   socket.on('hostAction', (msg) => {
-    if (!checkPasscode(msg)) { socket.emit('hostAuthFailed'); return; }
+    if (!msg || typeof msg !== 'object') return;
     switch (msg.action) {
       case 'kick': hostKick(msg.team); break;
       case 'forceSkip': hostForceSkip(); break;
@@ -709,13 +719,12 @@ io.on('connection', (socket) => {
   // Live broadcast or interfere with Offline solo play.
   socket.on('testChat', (msg) => {
     if (state.settings.gameMode !== 'test') return;
-    if (!checkPasscode(msg)) return;
-    handleChatMessage(msg.username || 'tester', msg.comment || '', msg.profilePic || '');
+    handleChatMessage((msg && msg.username) || 'tester', (msg && msg.comment) || '', (msg && msg.profilePic) || '');
   });
 
   // Offline (solo) play: an on-screen control bar lets you join a team and
-  // type your own guesses directly, with no TikTok connection and no
-  // passcode needed. Only active while in Offline mode.
+  // type your own guesses directly, with no TikTok connection needed.
+  // Only active while in Offline mode.
   socket.on('offlineAction', (msg) => {
     if (state.settings.gameMode !== 'offline') return;
     if (!msg || typeof msg !== 'object') return;

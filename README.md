@@ -68,7 +68,6 @@ menu → **Add Environment Variable**, and add these one at a time:
 |---|---|
 | `TIKTOK_USERNAME` | your TikTok username, no `@` (e.g. `johndoe123`) |
 | `EULER_KEY` | the key you copied in Step 2 |
-| `HOST_PASSCODE` | any password you'll remember, used to unlock the settings panel (you can also change it later from inside the app) |
 
 Click **Save Changes** - Render will automatically restart your app.
 
@@ -93,15 +92,17 @@ Click **Save Changes** - Render will automatically restart your app.
 ## Using the Host Settings Panel
 
 - Tap the **⚙ gear icon** in the top-right of the header - a settings panel
-  slides out from the right.
-- Type your host passcode into the box at the top before using any control.
-- Right below the passcode box is the **Mode** switch - see below.
+  slides out from the right. No passcode is needed - anyone with the page
+  open can tap the gear icon and use every control, so only share the URL
+  with people you trust (e.g. don't post it publicly - it's just for you /
+  your co-host to open on your own device).
+- The **Mode** switch is right at the top of the panel - see below.
 - The panel has four tabs:
 
 ### Mode: Test / Live / Offline
 
 A colored badge under the title (TEST MODE / LIVE / OFFLINE) always shows
-which mode you're in, and switching modes requires your host passcode.
+which mode you're in.
 
 - **Test** (the default on a fresh deploy) - no TikTok connection is made
   at all. Use the **Chat Simulator** in the System tab to fake chat
@@ -155,7 +156,6 @@ which mode you're in, and switching modes requires your host passcode.
 
 ### System tab
 - See your live TikTok connection status and force a reconnect.
-- Change your host passcode.
 - **Test Mode:** simulate chat messages (`joinrivaldle`, a 5-letter guess,
   `!leave`, etc.) without needing to be live on TikTok at all - perfect for
   rehearsing before you go live.
@@ -200,6 +200,27 @@ Tap the **✕** in the panel header to close it again before you go live.
   variable wasn't saved correctly on Render - double check Step 4.
 - Render's free tier can take ~30-60 seconds to "wake up" if it's been idle;
   open the URL once, wait a bit, then start your TikTok LIVE.
+
+## About the dictionary
+
+Guesses are checked against the `word-list` package - a comprehensive,
+SCOWL-derived English dictionary of roughly **470,000 words covering every
+word length**. The server filters that down to just its 5-letter entries
+(since every guess here is exactly 5 letters), which covers essentially
+every real 5-letter English word - there's no artificially narrow list
+rejecting legitimate guesses. When the server starts, its logs print the
+exact totals, e.g.:
+
+```
+Base dictionary loaded: 470,000+ English words total.
+Of those, X,XXX are valid 5-letter guesses.
+```
+
+The **possible secret answers**, on the other hand, are deliberately a
+smaller, hand-picked list of common, recognizable words (see below) - this
+is standard Wordle practice, so the word people have to *guess* is always
+fair and familiar, even though almost any real word is accepted as a
+*guess* along the way.
 
 ## Changing the secret word pool
 
